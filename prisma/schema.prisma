@@ -1,0 +1,479 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("DATABASE_SHADOW_URL")
+}
+
+model School {
+  id            String         @id @default(cuid())
+  name          String
+  logoUrl       String?
+  motto         String?
+  address       String?
+  contactPhone  String?
+  contactEmail  String?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  academicYears AcademicYear[]
+  classes       Class[]
+  notifications Notification[]
+  parents       Parent[]
+  programmes    Programme[]
+  smsLogs       SmsLog[]
+  students      Student[]
+  subjects      Subject[]
+  teachers      Teacher[]
+  users         User[]
+
+  @@map("schools")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  role         UserRole
+  schoolId     String
+  firstName    String
+  lastName     String
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  parent       Parent?
+  student      Student?
+  teacher      Teacher?
+  school       School    @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId])
+  @@index([email])
+  @@index([role])
+  @@map("users")
+}
+
+model AcademicYear {
+  id          String            @id @default(cuid())
+  schoolId    String
+  name        String
+  startDate   DateTime
+  endDate     DateTime
+  isCurrent   Boolean           @default(false)
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  school      School            @relation(fields: [schoolId], references: [id])
+  enrollments ClassEnrollment[]
+  classes     Class[]
+  terms       Term[]
+
+  @@unique([schoolId, name])
+  @@index([schoolId])
+  @@index([isCurrent])
+  @@map("academic_years")
+}
+
+model Term {
+  id                  String               @id @default(cuid())
+  yearId              String
+  name                String
+  number              Int
+  totalSchoolDays     Int
+  classScoreWeight    Int
+  examScoreWeight     Int
+  startDate           DateTime?
+  endDate             DateTime?
+  isCurrent           Boolean              @default(false)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  attendanceRecords   AttendanceRecord[]
+  conductRatings      ConductRating[]
+  reportCards         ReportCard[]
+  scores              Score[]
+  teachingAssignments TeachingAssignment[]
+  year                AcademicYear         @relation(fields: [yearId], references: [id])
+
+  @@unique([yearId, number])
+  @@index([yearId])
+  @@index([isCurrent])
+  @@map("terms")
+}
+
+model Programme {
+  id                String             @id @default(cuid())
+  schoolId          String
+  name              String
+  code              String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  classes           Class[]
+  programmeSubjects ProgrammeSubject[]
+  school            School             @relation(fields: [schoolId], references: [id])
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+  @@map("programmes")
+}
+
+model Subject {
+  id                  String               @id @default(cuid())
+  schoolId            String
+  name                String
+  code                String
+  isCore              Boolean              @default(false)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  programmeSubjects   ProgrammeSubject[]
+  scores              Score[]
+  school              School               @relation(fields: [schoolId], references: [id])
+  teachingAssignments TeachingAssignment[]
+
+  @@unique([schoolId, code])
+  @@index([schoolId])
+  @@index([isCore])
+  @@map("subjects")
+}
+
+model ProgrammeSubject {
+  id          String    @id @default(cuid())
+  programmeId String
+  subjectId   String
+  createdAt   DateTime  @default(now())
+  programme   Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  subject     Subject   @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([programmeId, subjectId])
+  @@index([programmeId])
+  @@index([subjectId])
+  @@map("programme_subjects")
+}
+
+model Class {
+  id                  String               @id @default(cuid())
+  schoolId            String
+  name                String
+  yearId              String
+  programmeId         String
+  formMasterId        String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  attendanceRecords   AttendanceRecord[]
+  enrollments         ClassEnrollment[]
+  formMaster          Teacher?             @relation("FormMasterClass", fields: [formMasterId], references: [id])
+  programme           Programme            @relation(fields: [programmeId], references: [id])
+  school              School               @relation(fields: [schoolId], references: [id])
+  year                AcademicYear         @relation(fields: [yearId], references: [id])
+  teachingAssignments TeachingAssignment[]
+
+  @@unique([schoolId, name, yearId])
+  @@index([schoolId])
+  @@index([yearId])
+  @@index([programmeId])
+  @@map("classes")
+}
+
+model Student {
+  id                String             @id @default(cuid())
+  schoolId          String
+  indexNumber       String
+  userId            String             @unique
+  dateOfBirth       DateTime?
+  gender            String?
+  status            StudentStatus      @default(ACTIVE)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  attendanceRecords AttendanceRecord[]
+  enrollments       ClassEnrollment[]
+  conductRatings    ConductRating[]
+  parentLinks       ParentStudent[]
+  reportCards       ReportCard[]
+  scores            Score[]
+  school            School             @relation(fields: [schoolId], references: [id])
+  user              User               @relation(fields: [userId], references: [id])
+
+  @@unique([schoolId, indexNumber])
+  @@index([schoolId])
+  @@index([status])
+  @@map("students")
+}
+
+model ClassEnrollment {
+  id         String       @id @default(cuid())
+  studentId  String
+  classId    String
+  yearId     String
+  enrolledAt DateTime     @default(now())
+  class      Class        @relation(fields: [classId], references: [id])
+  student    Student      @relation(fields: [studentId], references: [id])
+  year       AcademicYear @relation(fields: [yearId], references: [id])
+
+  @@unique([studentId, classId, yearId])
+  @@index([studentId, yearId])
+  @@index([classId, yearId])
+  @@map("class_enrollments")
+}
+
+model Teacher {
+  id                  String               @id @default(cuid())
+  schoolId            String
+  userId              String               @unique
+  staffId             String
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  formMasterClasses   Class[]              @relation("FormMasterClass")
+  school              School               @relation(fields: [schoolId], references: [id])
+  user                User                 @relation(fields: [userId], references: [id])
+  teachingAssignments TeachingAssignment[]
+
+  @@unique([schoolId, staffId])
+  @@index([schoolId])
+  @@map("teachers")
+}
+
+model TeachingAssignment {
+  id        String   @id @default(cuid())
+  teacherId String
+  subjectId String
+  classId   String
+  termId    String
+  createdAt DateTime @default(now())
+  class     Class    @relation(fields: [classId], references: [id])
+  subject   Subject  @relation(fields: [subjectId], references: [id])
+  teacher   Teacher  @relation(fields: [teacherId], references: [id])
+  term      Term     @relation(fields: [termId], references: [id])
+
+  @@unique([teacherId, subjectId, classId, termId])
+  @@index([teacherId, termId])
+  @@index([classId, subjectId])
+  @@map("teaching_assignments")
+}
+
+model Parent {
+  id           String          @id @default(cuid())
+  userId       String          @unique
+  schoolId     String
+  phone        String?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  studentLinks ParentStudent[]
+  school       School          @relation(fields: [schoolId], references: [id])
+  user         User            @relation(fields: [userId], references: [id])
+
+  @@index([schoolId])
+  @@map("parents")
+}
+
+model ParentStudent {
+  id        String   @id @default(cuid())
+  parentId  String
+  studentId String
+  relation  String
+  createdAt DateTime @default(now())
+  parent    Parent   @relation(fields: [parentId], references: [id])
+  student   Student  @relation(fields: [studentId], references: [id])
+
+  @@unique([parentId, studentId])
+  @@index([parentId])
+  @@index([studentId])
+  @@map("parent_students")
+}
+
+model AttendanceRecord {
+  id        String           @id @default(cuid())
+  studentId String
+  classId   String
+  termId    String
+  date      DateTime         @db.Date
+  status    AttendanceStatus
+  markedBy  String?
+  note      String?
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  class     Class            @relation(fields: [classId], references: [id])
+  student   Student          @relation(fields: [studentId], references: [id])
+  term      Term             @relation(fields: [termId], references: [id])
+
+  @@unique([studentId, date])
+  @@index([studentId, termId])
+  @@index([classId, date])
+  @@map("attendance_records")
+}
+
+model Score {
+  id              String          @id @default(cuid())
+  studentId       String
+  subjectId       String
+  termId          String
+  classScore      Int?
+  examScore       Int?
+  totalScore      Decimal?        @db.Decimal(5, 2)
+  grade           String?
+  gradePoint      Int?
+  remark          String?
+  status          ScoreStatus     @default(DRAFT)
+  submittedAt     DateTime?
+  approvedAt      DateTime?
+  amendmentReason String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  auditLogs       ScoreAuditLog[]
+  student         Student         @relation(fields: [studentId], references: [id])
+  subject         Subject         @relation(fields: [subjectId], references: [id])
+  term            Term            @relation(fields: [termId], references: [id])
+
+  @@unique([studentId, subjectId, termId])
+  @@index([studentId, termId])
+  @@index([subjectId, termId])
+  @@index([status])
+  @@map("scores")
+}
+
+model ScoreAuditLog {
+  id          String   @id @default(cuid())
+  scoreId     String
+  changedBy   String
+  action      String
+  beforeState Json?
+  afterState  Json?
+  reason      String?
+  createdAt   DateTime @default(now())
+  score       Score    @relation(fields: [scoreId], references: [id])
+
+  @@index([scoreId])
+  @@index([changedBy])
+  @@map("score_audit_logs")
+}
+
+model ReportCard {
+  id                   String           @id @default(cuid())
+  studentId            String
+  termId               String
+  status               ReportCardStatus @default(DRAFT)
+  overallTotal         Decimal?         @db.Decimal(8, 2)
+  overallAverage       Decimal?         @db.Decimal(5, 2)
+  classPosition        Int?
+  attendancePercentage Decimal?         @db.Decimal(5, 2)
+  daysAbsent           Int?
+  aggregate            Int?
+  generatedAt          DateTime?
+  publishedAt          DateTime?
+  publishedBy          String?
+  createdAt            DateTime         @default(now())
+  updatedAt            DateTime         @updatedAt
+  student              Student          @relation(fields: [studentId], references: [id])
+  term                 Term             @relation(fields: [termId], references: [id])
+
+  @@unique([studentId, termId])
+  @@index([studentId, termId])
+  @@index([status])
+  @@map("report_cards")
+}
+
+model ConductRating {
+  id        String   @id @default(cuid())
+  studentId String
+  termId    String
+  criterion String
+  rating    String
+  remark    String?
+  ratedBy   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  student   Student  @relation(fields: [studentId], references: [id])
+  term      Term     @relation(fields: [termId], references: [id])
+
+  @@unique([studentId, termId, criterion])
+  @@index([studentId, termId])
+  @@map("conduct_ratings")
+}
+
+model Notification {
+  id          String           @id @default(cuid())
+  schoolId    String
+  type        NotificationType
+  targetRole  UserRole
+  recipientId String?
+  title       String
+  message     String
+  isRead      Boolean          @default(false)
+  sentAt      DateTime         @default(now())
+  createdAt   DateTime         @default(now())
+  school      School           @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId])
+  @@index([recipientId])
+  @@index([targetRole])
+  @@map("notifications")
+}
+
+model SmsLog {
+  id               String    @id @default(cuid())
+  schoolId         String
+  eventType        String
+  recipientId      String
+  recipientPhone   String
+  message          String
+  status           SmsStatus @default(PENDING)
+  providerResponse Json?
+  attemptCount     Int       @default(0)
+  lastAttemptAt    DateTime?
+  sentAt           DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  school           School    @relation(fields: [schoolId], references: [id])
+
+  @@index([schoolId])
+  @@index([status])
+  @@index([recipientId])
+  @@map("sms_logs")
+}
+
+enum UserRole {
+  ADMIN
+  TEACHER
+  STUDENT
+  PARENT
+}
+
+enum StudentStatus {
+  ACTIVE
+  WITHDRAWN
+  GRADUATED
+  SUSPENDED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  EXCUSED
+}
+
+enum ScoreStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  AMENDMENT_REQUESTED
+}
+
+enum ReportCardStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum NotificationType {
+  REPORT_CARD_PUBLISHED
+  SCORE_AMENDMENT_REQUESTED
+  ATTENDANCE_WARNING
+  SCORE_APPROVED
+  GENERAL
+}
+
+enum SmsStatus {
+  PENDING
+  SENT
+  FAILED
+  RETRYING
+}

@@ -1,0 +1,31 @@
+# ============================================================
+# Ghana SHS Backend — Render Deployment Configuration
+# Defines the Web Service for automatic deployments.
+# ============================================================
+
+services:
+  - type: web
+    name: wamanafo-shs-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    region: oregon               # or: frankfurt, singapore, ohio
+    plan: starter                # upgrade to standard for production
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: DATABASE_URL
+        sync: false              # set manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true      # Render auto-generates a secure value
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: FRONTEND_URL
+        sync: false              # set to your Vercel URL
+      - key: SMS_PROVIDER
+        value: stub
+      - key: STORAGE_PROVIDER
+        value: stub
