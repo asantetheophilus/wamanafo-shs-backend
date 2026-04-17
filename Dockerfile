@@ -4,13 +4,18 @@
 # ============================================================
 
 # ── Stage 1: Builder ─────────────────────────────────────────
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
 
 WORKDIR /app
 
-# Install dependencies first (better layer caching)
-COPY package.json ./
-RUN npm install --frozen-lockfile
+# Install system dependencies required by Prisma
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Copy package files first for better caching
+COPY package.json package-lock.json* ./
+
+# Install all dependencies
+RUN npm install
 
 # Copy source
 COPY tsconfig.json ./
@@ -21,27 +26,31 @@ COPY src ./src/
 RUN npx prisma generate
 RUN npm run build
 
-# ── Stage 2: Production ───────────────────────────────────────
-FROM node:20-alpine AS production
+# ── Stage 2: Production ─────────────────────────────────────
+FROM node:20-slim AS production
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=4000
 
-# Install production deps only
-COPY package.json ./
-RUN npm install --omit=dev --frozen-lockfile
+# Install system dependencies required by Prisma at runtime
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
-# Copy compiled output and Prisma
+# Copy package files
+COPY package.json package-lock.json* ./
+
+# Install production dependencies only
+RUN npm install --omit=dev
+
+# Copy compiled output and Prisma runtime files
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
 COPY prisma ./prisma/
 
 # Create non-root user
-RUN addgroup -g 1001 -S nodejs && \
-    adduser  -S backend -u 1001 -G nodejs && \
-    chown -R backend:nodejs /app
+RUN groupadd -r nodejs && useradd -r -g nodejs backend && chown -R backend:nodejs /app
 
 USER backend
 
