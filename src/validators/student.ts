@@ -32,8 +32,19 @@ export const createStudentSchema = z.object({
 
   dateOfBirth: z
     .string()
-    .datetime({ message: "Date of birth must be a valid date." })
-    .optional(),
+    .regex(
+      /^\d{4}-\d{2}-\d{2}$/,
+      "Date of birth must be a valid date (YYYY-MM-DD)."
+    )
+    .refine(
+      (val) => {
+        const d = new Date(val);
+        return !isNaN(d.getTime()) && d < new Date();
+      },
+      "Date of birth must be a valid past date."
+    )
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
 
   gender: z.enum(["Male", "Female", "Other"]).optional(),
 
