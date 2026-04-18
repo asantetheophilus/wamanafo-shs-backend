@@ -14,6 +14,9 @@ function getTransporter() {
   const pass = process.env.SMTP_PASS;
 
   if (!host || !user || !pass) {
+    if (process.env.NODE_ENV === "production") {
+      throw Object.assign(new Error("SMTP is not configured for this server."), { code: "EMAIL_NOT_CONFIGURED", status: 500 });
+    }
     // Dev/stub mode — log to console
     return null;
   }

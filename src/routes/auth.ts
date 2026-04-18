@@ -39,15 +39,7 @@ type PasswordResetTokenRecord = {
   };
 };
 
-const passwordResetToken = (db as any).passwordResetToken as {
-  deleteMany: (args: { where: { userId: string } }) => Promise<unknown>;
-  create: (args: { data: { userId: string; token: string; expiresAt: Date } }) => Promise<PasswordResetTokenRecord>;
-  findUnique: (args: {
-    where: { token: string };
-    include: { user: { select: { id: true; isActive: true } } };
-  }) => Promise<PasswordResetTokenRecord | null>;
-  update: (args: { where: { id: string }; data: { usedAt: Date } }) => Promise<PasswordResetTokenRecord>;
-};
+const passwordResetToken = db.passwordResetToken;
 
 // ── POST /api/v1/auth/login ────────────────────────────────
 router.post("/login", async (req, res, next) => {

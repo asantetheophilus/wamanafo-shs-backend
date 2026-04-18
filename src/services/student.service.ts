@@ -10,6 +10,7 @@ import { logger } from "../lib/logger";
 import { StudentStatus, UserRole } from "../lib/enums";
 import bcrypt from "bcryptjs";
 import type { CreateStudentInput, UpdateStudentInput, StudentQueryInput } from "../validators/student";
+import { parseFlexibleDateInput } from "../lib/date-input";
 import type { StudentDTO, StudentListRow } from "../types/student";
 
 const SALT_ROUNDS = 12;
@@ -214,7 +215,7 @@ export async function createStudent(
         schoolId,
         indexNumber: input.indexNumber,
         userId:      user.id,
-        dateOfBirth: input.dateOfBirth ? new Date(input.dateOfBirth) : null,
+        dateOfBirth: input.dateOfBirth ? parseFlexibleDateInput(input.dateOfBirth) : null,
         gender:      input.gender ?? null,
         status:      StudentStatus.ACTIVE,
       },
@@ -222,6 +223,26 @@ export async function createStudent(
 
     // Enroll in class if classId and yearId provided
     if (input.classId && input.yearId) {
+      const cls = await tx.class.findFirst({
+        where: { id: input.classId, schoolId },
+        select: { id: true, yearId: true },
+      });
+      if (!cls) {
+        throw Object.assign(new Error("Selected class was not found."), { code: "BAD_REQUEST" });
+      }
+
+      const year = await tx.academicYear.findFirst({
+        where: { id: input.yearId, schoolId },
+        select: { id: true },
+      });
+      if (!year) {
+        throw Object.assign(new Error("Selected academic year was not found."), { code: "BAD_REQUEST" });
+      }
+
+      if (cls.yearId !== input.yearId) {
+        throw Object.assign(new Error("Selected class does not belong to the selected academic year."), { code: "BAD_REQUEST" });
+      }
+
       await tx.classEnrollment.create({
         data: {
           studentId: newStudent.id,
@@ -282,7 +303,7 @@ export async function updateStudent(
       where: { id: studentId },
       data: {
         ...(input.status      ? { status:      input.status                            } : {}),
-        ...(input.dateOfBirth ? { dateOfBirth: new Date(input.dateOfBirth)             } : {}),
+        ...(input.dateOfBirth ? { dateOfBirth: parseFlexibleDateInput(input.dateOfBirth) } : {}),
         ...(input.gender      ? { gender:      input.gender                            } : {}),
         ...(input.indexNumber ? { indexNumber: input.indexNumber                       } : {}),
       },

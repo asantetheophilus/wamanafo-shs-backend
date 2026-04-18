@@ -4,6 +4,7 @@
 
 import { z } from "zod";
 import { StudentStatus } from "../lib/enums";
+import { parseFlexibleDateInput } from "../lib/date-input";
 
 export const createStudentSchema = z.object({
   firstName: z
@@ -32,17 +33,27 @@ export const createStudentSchema = z.object({
 
   dateOfBirth: z
     .string()
-    .regex(
-      /^\d{4}-\d{2}-\d{2}$/,
-      "Date of birth must be a valid date (YYYY-MM-DD)."
+    .trim()
+    .refine(
+      (val) => {
+        if (!val) return true;
+        return parseFlexibleDateInput(val) !== null;
+      },
+      "Date of birth must be a valid date. Use YYYY-MM-DD or MM/DD/YYYY."
     )
     .refine(
       (val) => {
-        const d = new Date(val);
-        return !isNaN(d.getTime()) && d < new Date();
+        if (!val) return true;
+        const d = parseFlexibleDateInput(val);
+        return d instanceof Date && d < new Date();
       },
       "Date of birth must be a valid past date."
     )
+    .transform((val) => {
+      if (!val) return undefined;
+      const d = parseFlexibleDateInput(val);
+      return d ? d.toISOString().slice(0, 10) : val;
+    })
     .optional()
     .or(z.literal("").transform(() => undefined)),
 
