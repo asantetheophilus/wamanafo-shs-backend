@@ -12,7 +12,14 @@ router.get("/", async (req, res, next) => {
       include: { year: { select: { id: true, name: true } } },
       orderBy: [{ year: { startDate: "desc" } }, { number: "asc" }],
     });
-    res.json({ success: true, data: { items: terms, total: terms.length } });
+    const currentOnly = ["1", "true", "yes"].includes(String(req.query.current ?? "").toLowerCase());
+    const now = new Date();
+    const withFlags = terms.map((term) => ({
+      ...term,
+      isCurrent: !!(term.startDate && term.endDate && term.startDate <= now && term.endDate >= now),
+    }));
+    const items = currentOnly ? withFlags.filter((term) => term.isCurrent) : withFlags;
+    res.json({ success: true, data: { items, total: items.length } });
   } catch (err) {
     next(err);
   }

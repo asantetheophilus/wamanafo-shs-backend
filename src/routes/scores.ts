@@ -29,12 +29,22 @@ router.get("/", async (req, res, next) => {
 // GET /api/v1/scores/pending?classId=&termId=
 router.get("/pending", async (req, res, next) => {
   try {
-    if (req.user!.role !== UserRole.ADMIN) {
-      res.status(403).json({ success: false, error: "Forbidden.", code: "FORBIDDEN" }); return;
+    const query = req.query as Record<string, string>;
+    const mine = ["1", "true", "yes"].includes(String(query.mine ?? "").toLowerCase());
+
+    if (req.user!.role === UserRole.ADMIN) {
+      const { classId, termId } = query;
+      const result = await getScoresPendingApproval(req.user!.schoolId, classId, termId);
+      res.json({ success: true, data: result });
+      return;
     }
-    const { classId, termId } = req.query as Record<string, string>;
-    const result = await getScoresPendingApproval(req.user!.schoolId, classId, termId);
-    res.json({ success: true, data: result });
+
+    if (req.user!.role === UserRole.TEACHER && mine) {
+      res.json({ success: true, data: [] });
+      return;
+    }
+
+    res.status(403).json({ success: false, error: "Forbidden.", code: "FORBIDDEN" });
   } catch (err) { next(err); }
 });
 

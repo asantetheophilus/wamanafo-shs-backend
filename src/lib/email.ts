@@ -1,50 +1,81 @@
 // ============================================================
 // Wamanafo SHS — Email Service
 // Supports SMTP via Nodemailer. Falls back to console log in dev.
-// Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM,
-// SMTP_FROM_NAME, and FRONTEND_URL in environment.
+// Accepts both SMTP_* and MAIL_* environment variable names.
 // ============================================================
 
 import nodemailer from "nodemailer";
 
-function getTransporter() {
-  const host = process.env.SMTP_HOST;
-  const port = parseInt(process.env.SMTP_PORT ?? "587", 10);
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-
-  if (!host || !user || !pass) {
-    if (process.env.NODE_ENV === "production") {
-      throw Object.assign(new Error("SMTP is not configured for this server."), { code: "EMAIL_NOT_CONFIGURED", status: 500 });
+function readEnv(...names: string[]): string | undefined {
+  for (const name of names) {
+    const value = process.env[name];
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (trimmed.length > 0) return trimmed;
     }
-    // Dev/stub mode — log to console
+  }
+  return undefined;
+}
+
+function getMailConfig() {
+  const host = readEnv("SMTP_HOST", "MAIL_HOST");
+  const portRaw = readEnv("SMTP_PORT", "MAIL_PORT") ?? "587";
+  const port = Number.parseInt(portRaw, 10);
+  const user = readEnv("SMTP_USER", "MAIL_USER", "SMTP_USERNAME", "MAIL_USERNAME");
+  const pass = readEnv("SMTP_PASS", "MAIL_PASS", "SMTP_PASSWORD", "MAIL_PASSWORD");
+  const fromName = readEnv("SMTP_FROM_NAME", "MAIL_FROM_NAME") ?? "Wamanafo SHS";
+  const fromEmail = readEnv("SMTP_FROM", "MAIL_FROM") ?? user ?? "noreply@wamanafo-shs.edu.gh";
+
+  return {
+    host,
+    port: Number.isFinite(port) ? port : 587,
+    user,
+    pass,
+    fromName,
+    fromEmail,
+  };
+}
+
+function getTransporter() {
+  const config = getMailConfig();
+
+  if (!config.host || !config.user || !config.pass) {
+    if (process.env.NODE_ENV === "production") {
+      const missing = [
+        !config.host ? "SMTP_HOST/MAIL_HOST" : null,
+        !config.user ? "SMTP_USER/MAIL_USER" : null,
+        !config.pass ? "SMTP_PASS/MAIL_PASS" : null,
+      ].filter(Boolean).join(", ");
+
+      throw Object.assign(
+        new Error(`SMTP is not configured for this server. Missing: ${missing}`),
+        { code: "EMAIL_NOT_CONFIGURED", status: 500 }
+      );
+    }
     return null;
   }
 
   return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: { user, pass },
+    host: config.host,
+    port: config.port,
+    secure: config.port === 465,
+    auth: { user: config.user, pass: config.pass },
     tls: { rejectUnauthorized: process.env.NODE_ENV === "production" },
   });
 }
 
-const FROM_NAME  = process.env.SMTP_FROM_NAME  ?? "Wamanafo SHS";
-const FROM_EMAIL = process.env.SMTP_FROM       ?? "noreply@wamanafo-shs.edu.gh";
-
 export interface SendMailOptions {
-  to:      string;
+  to: string;
   subject: string;
-  html:    string;
-  text?:   string;
+  html: string;
+  text?: string;
 }
 
 export async function sendMail(opts: SendMailOptions): Promise<void> {
   const transporter = getTransporter();
+  const config = getMailConfig();
 
   if (!transporter) {
-    // Development stub — print to console
     console.info("\n[EMAIL STUB] ─────────────────────────────────");
     console.info(`  To:      ${opts.to}`);
     console.info(`  Subject: ${opts.subject}`);
@@ -54,11 +85,11 @@ export async function sendMail(opts: SendMailOptions): Promise<void> {
   }
 
   await transporter.sendMail({
-    from:    `"${FROM_NAME}" <${FROM_EMAIL}>`,
-    to:      opts.to,
+    from: `"${config.fromName}" <${config.fromEmail}>`,
+    to: opts.to,
     subject: opts.subject,
-    html:    opts.html,
-    text:    opts.text,
+    html: opts.html,
+    text: opts.text,
   });
 }
 
@@ -66,7 +97,7 @@ export async function sendMail(opts: SendMailOptions): Promise<void> {
 
 export function buildPasswordResetEmail(opts: {
   firstName: string;
-  resetUrl:  string;
+  resetUrl: string;
   expiresIn: string;
 }): { subject: string; html: string; text: string } {
   const subject = "Reset Your Wamanafo SHS Password";
@@ -84,7 +115,6 @@ export function buildPasswordResetEmail(opts: {
                overflow:hidden; box-shadow:0 4px 24px rgba(0,0,0,0.08); }
     .header  { background:linear-gradient(135deg,#0D5E6E 0%,#0a4a56 100%);
                padding:36px 40px; text-align:center; }
-    .header img { width:56px; height:56px; border-radius:12px; margin-bottom:12px; }
     .header h1  { color:#fff; margin:0; font-size:22px; font-weight:700; letter-spacing:-0.3px; }
     .header p   { color:rgba(255,255,255,0.7); margin:4px 0 0; font-size:13px; }
     .body    { padding:36px 40px; }
@@ -130,7 +160,14 @@ export function buildPasswordResetEmail(opts: {
 </body>
 </html>`;
 
-  const text = `Hello ${opts.firstName},\n\nReset your Wamanafo SHS password here:\n${opts.resetUrl}\n\nThis link expires in ${opts.expiresIn}.\n\nIf you did not request this, ignore this email.`;
+  const text = `Hello ${opts.firstName},
+
+Reset your Wamanafo SHS password here:
+${opts.resetUrl}
+
+This link expires in ${opts.expiresIn}.
+
+If you did not request this, ignore this email.`;
 
   return { subject, html, text };
 }

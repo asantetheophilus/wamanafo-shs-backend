@@ -18,9 +18,16 @@ export const createSubjectSchema = z.object({
     .toUpperCase()
     .trim(),
 
-  isCore: z.boolean({
+  isCore: z.preprocess((value) => {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") {
+      if (value.toLowerCase() === "true") return true;
+      if (value.toLowerCase() === "false") return false;
+    }
+    return value;
+  }, z.boolean({
     required_error: "Please specify whether this is a core subject.",
-  }),
+  })),
 });
 
 export type CreateSubjectInput = z.infer<typeof createSubjectSchema>;
