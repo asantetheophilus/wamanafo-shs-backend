@@ -2,6 +2,7 @@
 // Wamanafo SHS — Express Backend Server (updated)
 // ============================================================
 
+import "dotenv/config";
 import express          from "express";
 import cors             from "cors";
 import helmet           from "helmet";
