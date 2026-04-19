@@ -1,7 +1,6 @@
 // ============================================================
-// Wamanafo SHS — JWT Auth Middleware
-// Verifies Bearer token on every protected request.
-// Sets req.user for downstream route handlers.
+// Wamanafo SHS - JWT Auth Middleware
+// Accepts Bearer token and fallback cookie tokens.
 // ============================================================
 
 import { Request, Response, NextFunction } from "express";
@@ -17,15 +16,36 @@ declare global {
   }
 }
 
-export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
-  const header = req.headers.authorization;
+function readCookieToken(cookieHeader: string | undefined): string | null {
+  if (!cookieHeader) return null;
 
-  if (!header?.startsWith("Bearer ")) {
+  for (const part of cookieHeader.split(";")) {
+    const [rawKey, ...rest] = part.trim().split("=");
+    if (!rawKey || rest.length === 0) continue;
+    const key = rawKey.trim();
+    if (key !== "ghana_shs_token" && key !== "token" && key !== "auth_token") continue;
+    return decodeURIComponent(rest.join("=").trim());
+  }
+
+  return null;
+}
+
+function resolveToken(req: Request): string | null {
+  const header = req.headers.authorization;
+  if (header?.startsWith("Bearer ")) {
+    return header.slice(7).trim();
+  }
+
+  return readCookieToken(req.headers.cookie);
+}
+
+export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
+  const token = resolveToken(req);
+
+  if (!token) {
     res.status(401).json({ success: false, error: "No token provided.", code: "UNAUTHORIZED" });
     return;
   }
-
-  const token = header.slice(7);
 
   try {
     req.user = verifyToken(token);
